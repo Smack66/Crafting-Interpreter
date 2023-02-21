@@ -53,17 +53,19 @@ public class Lox {
         }
 
         Parser parser = new Parser(tokens);
-        Expr expression = parser.parse();
+        List<Stmt> statements = parser.parse();
 
         // Stop if there was a syntax error.(static analysis of the text)
         if (hadError) return;
         // if the syntatic analysis is passed , then start to interpreter the expression
+        System.out.println("============Print the result of Interpreter===============");
+        interpreter.interpret(statements);
+        // pretty printer
+//        System.out.println("============AST of the expression =================");
+//        System.out.println(new AstPrinter().print(expression));
+//        System.out.println("============value of the expression=================");
 
-        System.out.println("============AST of the expression =================");
-        System.out.println(new AstPrinter().print(expression));
-        System.out.println("============value of the expression=================");
-
-        interpreter.interpret(expression);
+//        interpreter.interpret(expression);
     }
 
     static void error(int line, String message) {

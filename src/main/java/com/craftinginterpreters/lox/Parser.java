@@ -1,5 +1,6 @@
 package com.craftinginterpreters.lox;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import static com.craftinginterpreters.lox.TokenType.*;
@@ -13,17 +14,101 @@ class Parser {
     Parser(List<Token> tokens) {
         this.tokens = tokens;
     }
-    Expr parse() {
-        try {
-            return expression();
-        } catch (ParseError error) {
-            return null;
+    // the method "parse" below can only parse expression .
+//    Expr parse() {
+//        try {
+//            return expression();
+//        } catch (ParseError error) {
+//            return null;
+//        }
+//    }
+    // the method below can deal with statement;
+    List<Stmt> parse(){
+        List<Stmt> statements =  new ArrayList<>();
+        while(!isAtEnd()){
+            statements.add(declaration());
         }
+        return statements;
     }
+    // production for "declaration"
+    // "declaration" has higher precedence than normal "statement"
+    // because somewhere can use "statement" but can't use "declaration"
+    private Stmt declaration(){
+       try {
+           if(match(VAR)) return varDeclaration();
+           return statement();
+       } catch(ParseError error) {
+           //if an error happens in a statement,
+           // parser should continue to parse from the next statement
+            synchronize();
+            return null;
+       }
+
+    }
+    private Stmt varDeclaration(){
+        Token name = consume(IDENTIFIER, "Expect variable name");
+        Expr initializer = null;
+        if(match(EQUAL)){
+            initializer = expression();
+        }
+        consume(SEMICOLON, "Expect ';' after variable declaration.");
+        return new Stmt.Var(name, initializer);
+    }
+    // production for "statement"
+    private Stmt statement(){
+        if(match(LEFT_BRACE)) return new Stmt.Block(block());
+
+        if(match(PRINT)) return printStatement();
+        return expressionStatement();
+    }
+    private List<Stmt> block(){
+        List<Stmt> statements = new ArrayList<>();
+        while(!check(RIGHT_BRACE) && !isAtEnd()){
+            statements.add(declaration());
+        }
+        consume(RIGHT_BRACE,"Expect '}' after block.");
+        return statements;
+    }
+    private Stmt printStatement(){
+        Expr value = expression();
+        consume(SEMICOLON,"Expect ';' after value");
+        return new Stmt.Print(value);
+    }
+
+    private Stmt expressionStatement(){
+        Expr expr =expression();
+        consume(SEMICOLON,"Expect ';' after expression");
+        return new Stmt.Expression(expr);
+    }
+
     //production for "expression"
     private Expr expression() {
         // top to bottom
-        return equality();
+//        return equality();
+        return assignment();
+    }
+
+    private Expr assignment() {
+        // Firstly, try to find an equality
+        // Fortunately, there will be equality expression
+        // if there is a "=" after the equality expression
+        // now we didn't care about if "expression" is actually an identifier
+        // we will evaluate it during the running of the interpreter
+
+        // Only the parser encounter a "=",
+        // it will know it is an assignment expression
+        Expr expr = equality();
+        if(match(EQUAL)){
+            Token equals = previous(); // save the equal token to report error
+            Expr value = assignment();
+
+            if(expr instanceof Expr.Variable){
+                Token name  = ((Expr.Variable)expr).name;
+                return new Expr.Assign(name, value);
+            }
+            error(equals, "Invalid assignment target.");
+        }
+        return expr;
     }
 
     private Expr equality() {
@@ -80,7 +165,9 @@ class Parser {
         if(match(TRUE)) return new Expr.Literal(true);
         if(match(FALSE)) return new Expr.Literal(false);
         if(match(NIL)) return new Expr.Literal(null);
-
+        if (match(IDENTIFIER)) {
+            return new Expr.Variable(previous());
+        }
         if(match(NUMBER, STRING)) return new Expr.Literal(previous().literal);
         if(match(LEFT_PAREN)){
             Expr expr = expression();
